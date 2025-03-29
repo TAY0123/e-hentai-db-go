@@ -108,11 +108,7 @@ type Cookie struct {
 	ID             int     `json:"id"`
 }
 
-func loadExCookies(filePath string) (string, error) {
-	data, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
+func loadExCookies(data []byte) (string, error) {
 	var cookies []Cookie
 	if err := json.Unmarshal(data, &cookies); err != nil {
 		return "", err
@@ -208,24 +204,32 @@ func NewSync(opts Options) *Sync {
 
 	if opts.Site == "exhentai" {
 		s.host = "exhentai.org"
+		var data []byte
 		if opts.CookieFile == "" {
 			// If cookie file is not provided, check environment variable
 			if envCookie := os.Getenv("COOKIE"); envCookie != "" {
-				s.cookies = envCookie
+				data = []byte(envCookie)
 				infoLog("Using cookie from environment variable for exhentai")
 			} else {
 				errorLog("For exhentai, --cookie-file must be provided or COOKIE env variable must be set")
 				os.Exit(1)
 			}
 		} else {
-			c, err := loadExCookies(opts.CookieFile)
+			var err error
+			data, err = ioutil.ReadFile(opts.CookieFile)
 			if err != nil {
 				errorLog("Error loading exhentai cookies: %v", err)
 				os.Exit(1)
 			}
-			s.cookies = c
-			infoLog("Using exhentai with provided cookie file")
+
 		}
+		c, err := loadExCookies(data)
+		if err != nil {
+			errorLog("Error loading exhentai cookies: %v", err)
+			os.Exit(1)
+		}
+		s.cookies = c
+		infoLog("Using exhentai with provided cookie file")
 	} else {
 		s.host = "e-hentai.org"
 		// For e-hentai, check environment variable first
