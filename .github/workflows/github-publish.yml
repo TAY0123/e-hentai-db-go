@@ -1,0 +1,124 @@
+name: Build, Import DB, Dump & Create Pre-release
+
+on:
+  workflow_dispatch:
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron:  '00 00 * * *'
+
+jobs:
+  build-and-dump:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the latest code from the repo
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.24'
+
+      - name: Build
+        run: |
+          go get
+          go build
+
+      # Get the URL for the SQL asset from the latest stable release
+      - name: Get latest dump pre-release asset URL
+        id: get_release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            if (releases.data.length === 0) {
+              core.setFailed("No releases found");
+            }
+            // Find the newest pre-release with a tag starting with "dump"
+            const dumpPreRelease = releases.data.find(
+              release => release.prerelease && release.tag_name.startsWith('dump')
+            );
+            if (!dumpPreRelease) {
+              core.setFailed("No pre-release with tag starting with 'dump' found");
+            }
+            // Filter all assets ending with .sql.zst
+            const sqlAssets = dumpPreRelease.assets.filter(asset => asset.name.endsWith('.sql.zst'));
+            if (sqlAssets.length === 0) {
+              core.setFailed("No SQL asset found in the pre-release");
+            }
+            // Join the URLs into a comma-separated string
+            const sqlUrls = sqlAssets.map(asset => asset.browser_download_url).join(',');
+            core.setOutput("sql_urls", sqlUrls);
+
+      # Download the SQL file from the latest release
+      - name: Download SQL file from latest release
+        run: |
+          echo "Downloading SQL assets..."
+          IFS=',' read -r -a sql_urls <<< "${{ steps.get_release.outputs.sql_urls }}"
+          for url in "${sql_urls[@]}"; do
+            echo "Downloading from $url ..."
+            # The -O option saves the file with its remote name
+            curl -L -O "${url}"
+          done
+
+
+      - name: Setup MySQL
+        # You may pin to the exact commit or the version.
+        # uses: mirromutth/mysql-action@de1fba8b3f90ce8db80f663a7043be3cf3231248
+        uses: mirromutth/mysql-action@v1.1
+        with:
+          mysql root password: password
+          
+      # Import the SQL file into your database
+      - name: Import SQL file into database
+        run: |
+          mysql -h 127.0.0.1 -u root -ppassword -e "CREATE DATABASE ex;"
+          echo "Importing SQL file into the database..."
+          for file in *.sql.zst; do
+            echo "Importing $file..."
+            # Example for MySQL:
+            zstd -dc "$file" | mysql -h 127.0.0.1 -u root -ppassword ex
+            # Example for PostgreSQL:
+            # psql -U ${{ secrets.DB_USER }} -d ${{ secrets.DB_NAME }} -f "$file"
+            echo "Database import for $file – update with your actual command."
+          done
+          
+      # Run your program and dump the updated database
+      - name: Run the program and dump database
+        env: # Or as an environment variable
+          COOKIE: ${{ secrets.COOKIE }}
+        run: |
+          echo "Running the program..."
+          # Replace with the command that runs your program
+          ./e-hentai-sync -site exhentai --offset 24 --db-host 127.0.0.1 --db-port 3306 --db-user root --db-pass password --db-name ex
+          echo "Dumping the database..."
+          export DATE=$(date +%F)
+
+          for TABLE in $(mysql -h 127.0.0.1 -u root -ppassword -D ex -e "SHOW TABLES;" | tail -n +2); do
+            echo "Dumping table: ${TABLE}"
+            export FILENAME="${TABLE}_${DATE}.sql"
+            mysqldump -h 127.0.0.1 -u root -ppassword ex "${TABLE}" | zstd -o "${FILENAME}.zst"
+          done
+          # Example for PostgreSQL dump (uncomment and adjust as needed):
+          # pg_dump -U ${{ secrets.DB_USER }} -d ${{ secrets.DB_NAME }} -f dump.sql
+          echo "Database dump step – update with your actual dump command."
+
+      # Create a new pre-release with the dump file attached
+      - name: Create a pre-release with the dump file
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: dump-$(date +'%Y%m%d%H%M')
+          release_name: "Dump $(date +'%Y-%m-%d %H:%M')"
+          prerelease: true
+        
+      # 9. Upload each per-table dump file as a release asset
+      - name: Upload dump assets to pre-release
+        run: |
+          for file in *.sql.zst; do
+            echo "Uploading $file..."
+            gh release upload ${{ steps.create_release.outputs.tag }} "$file" --clobber
+          done
