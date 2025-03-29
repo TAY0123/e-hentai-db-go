@@ -745,9 +745,33 @@ func main() {
 	offset := flag.Int64("offset", 0, "Static offset (in hours) to adjust the initial fetch starting point. This shifts the starting entry by a fixed number of hours relative to the last processed entry.")
 	cookieFile := flag.String("cookie-file", "", "Path to cookie JSON file (required for exhentai)")
 	debug := flag.Bool("debug", false, "Enable debug logging")
-	flag.Parse()
 
+	// New database configuration flags
+	dbHost := flag.String("db-host", "", "Database host")
+	dbPort := flag.String("db-port", "", "Database port")
+	dbUser := flag.String("db-user", "", "Database user")
+	dbPass := flag.String("db-pass", "", "Database password")
+	dbName := flag.String("db-name", "", "Database name")
+
+	flag.Parse()
 	debugMode = *debug
+
+	// Override viper config with command line arguments if provided
+	if *dbHost != "" {
+		viper.Set("database.host", *dbHost)
+	}
+	if *dbPort != "" {
+		viper.Set("database.port", *dbPort)
+	}
+	if *dbUser != "" {
+		viper.Set("database.user", *dbUser)
+	}
+	if *dbPass != "" {
+		viper.Set("database.password", *dbPass)
+	}
+	if *dbName != "" {
+		viper.Set("database.name", *dbName)
+	}
 
 	opts := Options{
 		Site:       *site,
@@ -766,3 +790,4 @@ func main() {
 		errorLog("Error generating report: %v", err)
 	}
 }
+
