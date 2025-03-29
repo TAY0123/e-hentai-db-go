@@ -42,7 +42,7 @@ database:
   user: "your_db_user"
   password: "your_db_password"
   name: "your_db_name"
-cooldown: 10 #recommanded
+sleep_duration: 10 #recommanded
 retry_count: 3
 ```
 
@@ -54,6 +54,7 @@ Alternatively, you can override these settings using environment variables:
 - `DB_PASS`
 - `DB_NAME`
 - `COOKIE`
+- `SLEEP_DURATION`
 
 ## Usage
 
