@@ -66,24 +66,16 @@ jobs:
 
 
       - name: Setup MySQL
-        # You may pin to the exact commit or the version.
-        # uses: mirromutth/mysql-action@de1fba8b3f90ce8db80f663a7043be3cf3231248
-        uses: mirromutth/mysql-action@v1.1
-        with:
-          mysql root password: password
+        run: sudo systemctl start mysql.service
           
       # Import the SQL file into your database
       - name: Import SQL file into database
         run: |
-          mysql -h 127.0.0.1 -u root -ppassword -e "CREATE DATABASE ex;"
+          mysql -h 127.0.0.1 -u root -proot -e "CREATE DATABASE ex;"
           echo "Importing SQL file into the database..."
           for file in *.sql.zst; do
             echo "Importing $file..."
-            # Example for MySQL:
-            zstd -dc "$file" | mysql -h 127.0.0.1 -u root -ppassword ex
-            # Example for PostgreSQL:
-            # psql -U ${{ secrets.DB_USER }} -d ${{ secrets.DB_NAME }} -f "$file"
-            echo "Database import for $file – update with your actual command."
+            zstd -dc "$file" | mysql -h 127.0.0.1 -u root -proot ex
           done
           
       # Run your program and dump the updated database
@@ -97,14 +89,11 @@ jobs:
           echo "Dumping the database..."
           export DATE=$(date +%F)
 
-          for TABLE in $(mysql -h 127.0.0.1 -u root -ppassword -D ex -e "SHOW TABLES;" | tail -n +2); do
+          for TABLE in $(mysql -h 127.0.0.1 -u root -proot -D ex -e "SHOW TABLES;" | tail -n +2); do
             echo "Dumping table: ${TABLE}"
             export FILENAME="${TABLE}_${DATE}.sql"
-            mysqldump -h 127.0.0.1 -u root -ppassword ex "${TABLE}" | zstd -o "${FILENAME}.zst"
+            mysqldump -h 127.0.0.1 -u root -proot ex "${TABLE}" | zstd -o "${FILENAME}.zst"
           done
-          # Example for PostgreSQL dump (uncomment and adjust as needed):
-          # pg_dump -U ${{ secrets.DB_USER }} -d ${{ secrets.DB_NAME }} -f dump.sql
-          echo "Database dump step – update with your actual dump command."
 
       # Create a new pre-release with the dump file attached
       - name: Create a pre-release with the dump file
