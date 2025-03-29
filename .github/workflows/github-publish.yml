@@ -25,7 +25,7 @@ jobs:
           go build
 
       # Get the URL for the SQL asset from the latest stable release
-      - name: Get latest release asset URL
+      - name: Get latest dump pre-release asset URL
         id: get_release
         uses: actions/github-script@v6
         with:
@@ -37,15 +37,17 @@ jobs:
             if (releases.data.length === 0) {
               core.setFailed("No releases found");
             }
-            // Find the latest non-prerelease release
-            const latestRelease = releases.data.find(release => !release.prerelease);
-            if (!latestRelease) {
-              core.setFailed("No stable releases found");
+            // Find the newest pre-release with a tag starting with "dump"
+            const dumpPreRelease = releases.data.find(
+              release => release.prerelease && release.tag_name.startsWith('dump')
+            );
+            if (!dumpPreRelease) {
+              core.setFailed("No pre-release with tag starting with 'dump' found");
             }
-            // Filter all assets ending with .sql
-            const sqlAssets = latestRelease.assets.filter(asset => asset.name.endsWith('.sql.zst'));
+            // Filter all assets ending with .sql.zst
+            const sqlAssets = dumpPreRelease.assets.filter(asset => asset.name.endsWith('.sql.zst'));
             if (sqlAssets.length === 0) {
-              core.setFailed("No SQL asset found in the latest release");
+              core.setFailed("No SQL asset found in the pre-release");
             }
             // Join the URLs into a comma-separated string
             const sqlUrls = sqlAssets.map(asset => asset.browser_download_url).join(',');
@@ -105,7 +107,7 @@ jobs:
         id: create_release
         uses: ncipollo/release-action@v1
         with:
-          tag: pre-release-$(date +'%Y%m%d%H%M')
+          tag: dump-$(date +'%Y%m%d%H%M')
           release_name: "Dump $(date +'%Y-%m-%d %H:%M')"
           prerelease: true
         
