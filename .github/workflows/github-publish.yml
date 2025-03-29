@@ -1,5 +1,8 @@
 name: Build, Import DB, Dump & Create Pre-release
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   schedule:
@@ -106,4 +109,3 @@ jobs:
           tag: dump-$(date +'%Y%m%d%H%M')
           prerelease: true
           artifacts: "*.sql.zst"
-          token: ${{ secrets.TOKEN }}
