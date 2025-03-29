@@ -24,7 +24,6 @@ jobs:
           go get
           go build
 
-      # Get the URL for the SQL asset from the latest stable release
       - name: Get latest dump pre-release asset URL
         id: get_release
         uses: actions/github-script@v6
@@ -37,12 +36,12 @@ jobs:
             if (releases.data.length === 0) {
               core.setFailed("No releases found");
             }
-            // Find the newest pre-release with a tag starting with "dump"
+            // Find the newest pre-release with a name starting with "Dump"
             const dumpPreRelease = releases.data.find(
-              release => release.prerelease && release.tag_name.startsWith('dump')
+              release => release.prerelease && release.name.startsWith('Dump')
             );
             if (!dumpPreRelease) {
-              core.setFailed("No pre-release with tag starting with 'dump' found");
+              core.setFailed("No Dump pre-release found");
             }
             // Filter all assets ending with .sql.zst
             const sqlAssets = dumpPreRelease.assets.filter(asset => asset.name.endsWith('.sql.zst'));
@@ -52,6 +51,8 @@ jobs:
             // Join the URLs into a comma-separated string
             const sqlUrls = sqlAssets.map(asset => asset.browser_download_url).join(',');
             core.setOutput("sql_urls", sqlUrls);
+            // Also output the release tag for later use
+            core.setOutput("release_tag", dumpPreRelease.tag_name);
 
       # Download the SQL file from the latest release
       - name: Download SQL file from latest release
@@ -101,7 +102,6 @@ jobs:
         id: create_release
         uses: ncipollo/release-action@v1.14.0
         with:
-          tag: dump-$(date +'%Y%m%d%H%M')
           name: "Dump $(date +'%Y-%m-%d %H:%M')"
           prerelease: true
           artifacts: "*.sql.zst"

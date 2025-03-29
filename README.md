@@ -2,6 +2,9 @@
 
 A command-line tool written in Go that synchronizes gallery data from e-hentai/exhentai websites into a MySQL database. The tool fetches page entries via HTTP, calls the e-hentai API for metadata, and then inserts or updates the database. At the end of the sync process, it generates a report with total entry count, the last posted gallery ID, and the cutoff time in UTC.
 
+## Database dump
+- [Releases](https://github.com/TAY0123/e-hentai-db-go/releases)
+
 ## Requirements
 
 - Go (version 1.14+ recommended)
