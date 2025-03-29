@@ -100,12 +100,20 @@ jobs:
             mysqldump -h 127.0.0.1 -u root -proot ex "${TABLE}" | zstd -o "${FILENAME}.zst"
           done
 
+      - name: Generate name
+        id: generate_name
+        run: echo "::set-output name=name::Dump $(date +'%Y-%m-%d %H:%M')"
+
+      - name: Generate tag name
+        id: generate_tag
+        run: echo "::set-output name=tag::dump-$(date +'%Y%m%d%H%M')"
+        
       # Create a new pre-release with the dump file attached
       - name: Create a pre-release with the dump file and upload artifacts
         id: create_release
         uses: ncipollo/release-action@v1.14.0
         with:
-          name: "Dump $(date +'%Y-%m-%d %H:%M')"
-          tag: dump-$(date +'%Y%m%d%H%M')
+          name: ${{ steps.generate_name.outputs.name }}
+          tag: ${{ steps.generate_tag.outputs.tag }}
           prerelease: true
           artifacts: "*.sql.zst"
