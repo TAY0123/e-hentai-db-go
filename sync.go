@@ -744,9 +744,10 @@ func (s *Sync) run() error {
 
 func main() {
 	site := flag.String("site", "e-hentai", "Target site: 'e-hentai' or 'exhentai'")
-	offset := flag.Int64("offset", 0, "Static offset (in hours) to adjust the initial fetch starting point. This shifts the starting entry by a fixed number of hours relative to the last processed entry.")
+	offset := flag.Int64("offset", 0, "Static offset (in hours) to adjust the initial fetch starting point.")
 	cookieFile := flag.String("cookie-file", "", "Path to cookie JSON file (required for exhentai)")
 	debug := flag.Bool("debug", false, "Enable debug logging")
+	sleepDuration := flag.Int("sleep-duration", 0, "Override sleep duration between page fetches (in seconds)")
 
 	// New database configuration flags
 	dbHost := flag.String("db-host", "", "Database host")
@@ -774,6 +775,9 @@ func main() {
 	if *dbName != "" {
 		viper.Set("database.name", *dbName)
 	}
+	if *sleepDuration > 0 {
+		viper.Set("sleep_duration", *sleepDuration)
+	}
 
 	opts := Options{
 		Site:       *site,
@@ -787,9 +791,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Generate the final report after the sync loop completes.
 	if err := instance.generateReport(); err != nil {
 		errorLog("Error generating report: %v", err)
 	}
 }
-

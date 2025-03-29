@@ -6,9 +6,9 @@ A command-line tool written in Go that synchronizes gallery data from e-hentai/e
 
 - Go (version 1.14+ recommended)
 - MySQL Database
-- [Viper](https://github.com/spf13/viper) for configuration management
-- [pterm](https://github.com/pterm/pterm) for terminal UI enhancements
-- [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql) for MySQL connectivity
+- [Viper](https://github.com/spf13/viper)
+- [pterm](https://github.com/pterm/pterm)
+- [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql)
 
 ## Build
 
@@ -42,7 +42,7 @@ database:
   user: "your_db_user"
   password: "your_db_password"
   name: "your_db_name"
-cooldown: 10 #recommanded
+sleep_duration: 10 #recommanded
 retry_count: 3
 ```
 
@@ -54,13 +54,15 @@ Alternatively, you can override these settings using environment variables:
 - `DB_PASS`
 - `DB_NAME`
 - `COOKIE`
+- `SLEEP_DURATION`
 
 ## Usage
+If you want to parse exhentai remember to export cookie json from the browser and save to cookie.json file
 
 Run the sync tool with the following options:
 
 ```bash
-./sync --site="exhentai" --overlap=24 --cookie-file="path/to/cookie.json" --debug
+./e-hentai-sync --site="exhentai" --offset=24 --cookie-file="path/to/cookie.json" --debug
 ```
 
 ### Command-Line Flags
@@ -69,7 +71,7 @@ Run the sync tool with the following options:
   Target site; use either `"e-hentai"` or `"exhentai"`.
 
 - **`--offset`**:  
-  Static offset (in hours) to adjust the initial fetch starting point. This shifts the starting entry by a fixed number of hours relative to the last processed entry.
+  Offset (in hours) to adjust the initial fetch starting point. This shifts the starting entry by a fixed number of hours relative to the last processed entry.
 
 - **`--cookie-file`**:  
   Path to a cookie JSON file (required for exhentai). If not provided, the tool will look for the `COOKIE` environment variable.
@@ -84,7 +86,3 @@ Contributions are welcome! Please open issues or submit pull requests with impro
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-This README provides a clear overview of the project, setup instructions, usage examples, and detailed descriptions of the offset and overlap options to help users understand the tool’s functionality.
