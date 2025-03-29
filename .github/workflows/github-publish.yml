@@ -97,18 +97,12 @@ jobs:
           done
 
       # Create a new pre-release with the dump file attached
-      - name: Create a pre-release with the dump file
+      - name: Create a pre-release with the dump file and upload artifacts
         id: create_release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@v1.14.0
         with:
           tag: dump-$(date +'%Y%m%d%H%M')
-          release_name: "Dump $(date +'%Y-%m-%d %H:%M')"
+          name: "Dump $(date +'%Y-%m-%d %H:%M')"
           prerelease: true
-        
-      # 9. Upload each per-table dump file as a release asset
-      - name: Upload dump assets to pre-release
-        run: |
-          for file in *.sql.zst; do
-            echo "Uploading $file..."
-            gh release upload ${{ steps.create_release.outputs.tag }} "$file" --clobber
-          done
+          artifacts: "*.sql.zst"
+          token: ${{ secrets.TOKEN }}
