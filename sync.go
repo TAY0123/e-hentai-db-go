@@ -48,18 +48,18 @@ func errorLog(format string, a ...interface{}) {
 // --- Configuration using Viper with Environment Variables ---
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPass     string
-	DBName     string
-	Cooldown   int // in seconds
-	RetryCount int // number of retries for API and page fetch calls
+	DBHost        string
+	DBPort        string
+	DBUser        string
+	DBPass        string
+	DBName        string
+	SleepDuration int // in seconds
+	RetryCount    int // number of retries for API and page fetch calls
 }
 
 func loadConfig() Config {
 	// Set default values
-	viper.SetDefault("cooldown", 3)
+	viper.SetDefault("sleep_duration", 10)
 	viper.SetDefault("retry_count", 3)
 
 	// Bind environment variables (optionally with a prefix)
@@ -69,6 +69,8 @@ func loadConfig() Config {
 	viper.BindEnv("database.user", "DB_USER")
 	viper.BindEnv("database.password", "DB_PASS")
 	viper.BindEnv("database.name", "DB_NAME")
+	// Bind sleep duration from environment variable SLEEP_DURATION
+	viper.BindEnv("sleep_duration", "SLEEP_DURATION")
 
 	// Read from config file if available
 	viper.SetConfigName("config")
@@ -79,13 +81,13 @@ func loadConfig() Config {
 	}
 
 	return Config{
-		DBHost:     viper.GetString("database.host"),
-		DBPort:     viper.GetString("database.port"),
-		DBUser:     viper.GetString("database.user"),
-		DBPass:     viper.GetString("database.password"),
-		DBName:     viper.GetString("database.name"),
-		Cooldown:   viper.GetInt("cooldown"),
-		RetryCount: viper.GetInt("retry_count"),
+		DBHost:        viper.GetString("database.host"),
+		DBPort:        viper.GetString("database.port"),
+		DBUser:        viper.GetString("database.user"),
+		DBPass:        viper.GetString("database.password"),
+		DBName:        viper.GetString("database.name"),
+		SleepDuration: viper.GetInt("sleep_duration"),
+		RetryCount:    viper.GetInt("retry_count"),
 	}
 }
 
@@ -658,7 +660,7 @@ func (s *Sync) generateReport() error {
 	return nil
 }
 
-// run retrieves the starting gallery entry then loops fetching pages using a cooldown.
+// run retrieves the starting gallery entry then loops fetching pages using a sleep duration.
 // It now uses the offset option if provided.
 func (s *Sync) run() error {
 	_, err := s.db.Exec("SET NAMES UTF8MB4")
@@ -686,7 +688,7 @@ func (s *Sync) run() error {
 	area, _ := pterm.DefaultArea.Start()
 
 	for {
-		time.Sleep(time.Duration(s.config.Cooldown) * time.Second)
+		time.Sleep(time.Duration(s.config.SleepDuration) * time.Second)
 		fetchMsg := fmt.Sprintf("Fetching page from https://%s/?prev=%s", s.host, prev)
 
 		var pageEntries []PageEntry
