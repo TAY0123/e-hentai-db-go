@@ -81,6 +81,7 @@ jobs:
             echo "Importing $file..."
             zstd -dc "$file" | mysql -h 127.0.0.1 -u root -proot ex
           done
+          rm -rf *.sql.zst
           
       # Run your program and dump the updated database
       - name: Run the program and dump database
