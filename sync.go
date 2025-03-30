@@ -139,6 +139,8 @@ type Options struct {
 	Site       string
 	Offset     int64 // number of hours to offset when fetching pages
 	CookieFile string
+	OnlyExpunged bool
+    AlsoExpunged bool
 }
 
 type PageEntry struct {
@@ -191,6 +193,8 @@ type Sync struct {
 	db      *sql.DB
 	config  Config
 	client  *http.Client
+	onlyExpunged bool
+    alsoExpunged bool
 }
 
 // NewSync creates a new Sync instance based on provided options.
@@ -200,6 +204,8 @@ func NewSync(opts Options) *Sync {
 		config: loadConfig(),
 		client: &http.Client{Timeout: 15 * time.Second},
 		offset: opts.Offset,
+		onlyExpunged: opts.OnlyExpunged,
+		alsoExpunged: opts.AlsoExpunged,
 	}
 
 	if opts.Site == "exhentai" {
@@ -302,11 +308,125 @@ func (s *Sync) getOffsetGid(offset int64) (int64, error) {
 	return offsetGid, nil
 }
 
+// getLastExpungedGid returns the last expunged gallery id from the database.
+func (s *Sync) getLastExpungedGid() (int64, error) {
+	query := "SELECT gid FROM gallery WHERE expunged=1 ORDER BY gid DESC LIMIT 1"
+	var gid int64
+	err := s.db.QueryRow(query).Scan(&gid)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return gid, nil
+}
+
+// getOffsetExpungedGid returns the starting expunged gallery id based on a time offset (in hours).
+func (s *Sync) getOffsetExpungedGid(offset int64) (int64, error) {
+	var latestPosted int64
+	err := s.db.QueryRow("SELECT posted FROM gallery WHERE expunged=1 ORDER BY posted DESC LIMIT 1").Scan(&latestPosted)
+	if err != nil {
+		return 0, err
+	}
+	threshold := latestPosted - (offset * 3600)
+	var offsetGid int64
+	err = s.db.QueryRow("SELECT gid FROM gallery WHERE expunged=1 AND posted <= ? ORDER BY posted DESC LIMIT 1", threshold).Scan(&offsetGid)
+	if err == sql.ErrNoRows {
+		return s.getLastExpungedGid()
+	}
+	if err != nil {
+		return 0, err
+	}
+	return offsetGid, nil
+}
+
+// runExpungedFetch performs the fetch loop exclusively for expunged galleries.
+func (s *Sync) runExpungedFetch() error {
+	_, err := s.db.Exec("SET NAMES UTF8MB4")
+	if err != nil {
+		return err
+	}
+
+	var startGid int64
+	if s.offset > 0 {
+		startGid, err = s.getOffsetExpungedGid(s.offset)
+		if err != nil {
+			errorLog("Error getting expunged offset: %v", err)
+			return err
+		}
+	} else {
+		startGid, err = s.getLastExpungedGid()
+		if err != nil {
+			return err
+		}
+	}
+	
+	infoLog("Starting expunged fetch with gid: %d", startGid)
+	prev := strconv.FormatInt(startGid, 10)
+	area, _ := pterm.DefaultArea.Start()
+	
+	for {
+		time.Sleep(time.Duration(s.config.SleepDuration) * time.Second)
+		fetchMsg := fmt.Sprintf("Fetching expunged page from https://%s/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on&f_sh=on&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on", s.host, prev)
+		var pageEntries []PageEntry
+		for attempt := 0; attempt < s.config.RetryCount; attempt++ {
+			pageEntries, err = s.getPagesByPrev(prev, true)
+			if err == nil {
+				break
+			}
+			errorLog("Error fetching expunged page on attempt %d: %v", attempt+1, err)
+			time.Sleep(1 * time.Second)
+		}
+		if err != nil {
+			errorLog("Error fetching expunged page after %d attempts: %v", s.config.RetryCount, err)
+			break
+		}
+		if len(pageEntries) == 0 {
+			infoLog("No new expunged entries found. Exiting expunged fetch loop.")
+			break
+		}
+		
+		pageCount := len(pageEntries)
+		apiCount, err := s.importPage(pageEntries)
+		if err != nil {
+			errorLog("Error importing expunged page: %v", err)
+		}
+		
+		newestEntryDate := "N/A"
+		if pageCount > 0 {
+			t, err := time.Parse("2006-01-02 15:04", pageEntries[0].Posted)
+			if err != nil {
+				newestEntryDate = pageEntries[0].Posted
+			} else {
+				newestEntryDate = t.Format("2006-01-02")
+			}
+		}
+		bulletItems := []pterm.BulletListItem{
+			{Level: 1, Text: fmt.Sprintf("Newest Expunged Entry Date: %s", newestEntryDate)},
+			{Level: 1, Text: fmt.Sprintf("Fetched Expunged Page Entries: %d", pageCount)},
+			{Level: 1, Text: fmt.Sprintf("Fetched Expunged API Entries: %d", apiCount)},
+		}
+		bulletStr, _ := pterm.DefaultBulletList.WithItems(bulletItems).Srender()
+		
+		prev = pageEntries[0].GID
+		nextMsg := fmt.Sprintf("Next fetch will use prev=%s", prev)
+		area.Update(fetchMsg + "\n" + nextMsg + "\n" + bulletStr)
+	}
+	return nil
+}
+
 // --- Page Fetching Helpers ---
 
-func (s *Sync) getPagesByPrev(prev string) ([]PageEntry, error) {
-	path := fmt.Sprintf("/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on&f_sh=&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on", prev)
-	url := "https://" + s.host + path
+func (s *Sync) getPagesByPrev(prev string, expunged bool) ([]PageEntry, error) {
+    var f_sh string
+    if expunged {
+        f_sh = "&f_sh=on"
+    } else {
+        f_sh = ""
+    }
+    path := fmt.Sprintf("/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on%s&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on", prev, f_sh)
+    url := "https://" + s.host + path
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -356,7 +476,7 @@ func (s *Sync) getPagesByPrev(prev string) ([]PageEntry, error) {
 	if banned, waitTime := extractBanCooldown(bodyStr); banned {
 		infoLog("Detected ban message. Initiating cooldown for %d seconds.", waitTime)
 		runBanCooldown(waitTime)
-		return s.getPagesByPrev(prev)
+		return s.getPagesByPrev(prev,expunged)
 	}
 
 	return parsePageEntries(bodyStr)
@@ -668,57 +788,63 @@ func (s *Sync) generateReport() error {
 // It now uses the offset option if provided.
 func (s *Sync) run() error {
 	_, err := s.db.Exec("SET NAMES UTF8MB4")
-	if err != nil {
-		return err
-	}
-
-	var startGid int64
-	if s.offset > 0 {
-		startGid, err = s.getOffsetGid(s.offset)
-		if err != nil {
-			errorLog("Error getting offset: %v", err)
-			return err
-		}
-		infoLog("Using offset gid: %d", startGid)
-	} else {
-		startGid, err = s.getLastGid()
-		if err != nil {
-			return err
-		}
-		infoLog("Got last gid = %d", startGid)
-	}
-	prev := strconv.FormatInt(startGid, 10)
-
-	area, _ := pterm.DefaultArea.Start()
-
-	for {
-		time.Sleep(time.Duration(s.config.SleepDuration) * time.Second)
-		fetchMsg := fmt.Sprintf("Fetching page from https://%s/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on&f_sh=&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on", s.host, prev)
-
-		var pageEntries []PageEntry
-		for attempt := 0; attempt < s.config.RetryCount; attempt++ {
-			pageEntries, err = s.getPagesByPrev(prev)
-			if err == nil {
-				break
-			}
-			errorLog("Error fetching page on attempt %d: %v", attempt+1, err)
-			time.Sleep(1 * time.Second)
-		}
-		if err != nil {
-			errorLog("Error fetching page after %d attempts: %v", s.config.RetryCount, err)
-			break
-		}
-
-		if len(pageEntries) == 0 {
-			infoLog("No new entries found. Exiting loop.")
-			break
-		}
-
-		pageCount := len(pageEntries)
-		apiCount, err := s.importPage(pageEntries)
-		if err != nil {
-			errorLog("Error importing page: %v", err)
-		}
+    if err != nil {
+        return err
+    }
+    
+    // If only expunged mode is enabled, run the expunged fetch loop exclusively.
+    if s.onlyExpunged {
+        infoLog("Running in only-expunged mode.")
+        return s.runExpungedFetch()
+    }
+    
+    var startGid int64
+    if s.offset > 0 {
+        startGid, err = s.getOffsetGid(s.offset)
+        if err != nil {
+            errorLog("Error getting offset: %v", err)
+            return err
+        }
+        infoLog("Using offset gid: %d", startGid)
+    } else {
+        startGid, err = s.getLastGid()
+        if err != nil {
+            return err
+        }
+        infoLog("Got last gid = %d", startGid)
+    }
+    prev := strconv.FormatInt(startGid, 10)
+    
+    area, _ := pterm.DefaultArea.Start()
+    
+    for {
+        time.Sleep(time.Duration(s.config.SleepDuration) * time.Second)
+        fetchMsg := fmt.Sprintf("Fetching page from https://%s/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on&f_sh=&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on", s.host, prev)
+        
+        var pageEntries []PageEntry
+        for attempt := 0; attempt < s.config.RetryCount; attempt++ {
+            pageEntries, err = s.getPagesByPrev(prev, false)
+            if err == nil {
+                break
+            }
+            errorLog("Error fetching page on attempt %d: %v", attempt+1, err)
+            time.Sleep(1 * time.Second)
+        }
+        if err != nil {
+            errorLog("Error fetching page after %d attempts: %v", s.config.RetryCount, err)
+            break
+        }
+        
+        if len(pageEntries) == 0 {
+            infoLog("No new entries found. Exiting loop.")
+            break
+        }
+        
+        pageCount := len(pageEntries)
+        apiCount, err := s.importPage(pageEntries)
+        if err != nil {
+            errorLog("Error importing page: %v", err)
+        }
 
 		newestEntryDate := "N/A"
 		if pageCount > 0 {
@@ -741,6 +867,12 @@ func (s *Sync) run() error {
 		nextMsg := fmt.Sprintf("Next fetch will use prev=%s", prev)
 		area.Update(fetchMsg + "\n" + nextMsg + "\n" + bulletStr)
 	}
+    if s.alsoExpunged {
+        infoLog("Normal fetch completed. Now starting expunged fetch as per also-expunged option.")
+        if err := s.runExpungedFetch(); err != nil {
+            errorLog("Error during expunged fetch: %v", err)
+        }
+    }
 	return nil
 }
 
@@ -752,6 +884,8 @@ func main() {
 	cookieFile := flag.String("cookie-file", "", "Path to cookie JSON file (required for exhentai)")
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	sleepDuration := flag.Int("sleep-duration", 0, "Override sleep duration between page fetches (in seconds)")
+	onlyExpunged := flag.Bool("only-expunged", false, "Fetch only expunged galleries")
+	alsoExpunged := flag.Bool("also-expunged", false, "Also fetch expunged galleries after normal fetching")
 
 	// New database configuration flags
 	dbHost := flag.String("db-host", "", "Database host")
@@ -787,6 +921,8 @@ func main() {
 		Site:       *site,
 		Offset:     *offset,
 		CookieFile: *cookieFile,
+		OnlyExpunged: *onlyExpunged,
+		AlsoExpunged: *alsoExpunged,
 	}
 
 	instance := NewSync(opts)
