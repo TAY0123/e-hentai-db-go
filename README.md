@@ -65,7 +65,7 @@ If you want to parse exhentai remember to export cookie json from the browser an
 Run the sync tool with the following options:
 
 ```bash
-./e-hentai-sync --site="exhentai" --offset=24 --cookie-file="path/to/cookie.json" --debug
+./e-hentai-sync --site="exhentai" --offset=24 --cookie-file="path/to/cookie.json"
 ```
 
 ### Command-Line Flags
@@ -81,6 +81,15 @@ Run the sync tool with the following options:
 
 - **`--debug`**:  
   Enable debug logging.
+
+- **`--only-expunged`**:  
+  Fetch only expunged entry.
+
+- **`--also-expunged`**:  
+  Also fetch expunged entry after normal entry updated.
+
+- **`--search`**:  
+  search query for filter result: [Gallery Searching](https://ehwiki.org/wiki/Gallery_Searching)
 
 ## Contributing
 
