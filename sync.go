@@ -142,7 +142,7 @@ type Options struct {
 	CookieFile string
 	OnlyExpunged bool
     AlsoExpunged bool
-	Tag          string
+	Search          string
 }
 
 type PageEntry struct {
@@ -197,7 +197,7 @@ type Sync struct {
 	client  *http.Client
 	onlyExpunged bool
     alsoExpunged bool
-	tag          string
+	search          string
 }
 
 // NewSync creates a new Sync instance based on provided options.
@@ -209,7 +209,7 @@ func NewSync(opts Options) *Sync {
 		offset: opts.Offset,
 		onlyExpunged: opts.OnlyExpunged,
 		alsoExpunged: opts.AlsoExpunged,
-		tag:          opts.Tag, // assign the tag from options
+		search:          opts.Search, // assign the search from options
 	}
 
 	if opts.Site == "exhentai" {
@@ -426,10 +426,10 @@ func (s *Sync) runExpungedFetch() error {
 // --- Page Fetching Helpers ---
 
 func (s *Sync) getPagesByPrev(prev string, expunged bool) (string, []PageEntry, error) {
-    // Set the extra search parameter if a tag is provided.
-	tagParam := ""
-	if s.tag != "" {
-		tagParam = "&f_search=" + url.QueryEscape(s.tag)
+    // Set the extra search parameter if a search is provided.
+	searchParam := ""
+	if s.search != "" {
+		searchParam = "&f_search=" + url.QueryEscape(s.search)
 	}
 
 	// Set the flag for expunged if needed.
@@ -441,8 +441,8 @@ func (s *Sync) getPagesByPrev(prev string, expunged bool) (string, []PageEntry, 
 	}
 
 	// Build the path and URL.
-	path := fmt.Sprintf("/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on%s%s&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on",
-		prev, f_sh, tagParam)
+	path := fmt.Sprintf("/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_ssearchs=on%s%s&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on",
+		prev, f_sh, searchParam)
 	fetchURL := "https://" + s.host + path
 
 	// Create and set up the HTTP request.
@@ -909,7 +909,7 @@ func main() {
 	sleepDuration := flag.Int("sleep-duration", 0, "Override sleep duration between page fetches (in seconds)")
 	onlyExpunged := flag.Bool("only-expunged", false, "Fetch only expunged galleries")
 	alsoExpunged := flag.Bool("also-expunged", false, "Also fetch expunged galleries after normal fetching")
-	tagSearch := flag.String("tag", "", "Optional tag to search for (input not URL encoded)")
+	search := flag.String("search", "", "Optional keyword to search for")
 
 	dbHost := flag.String("db-host", "", "Database host")
 	dbPort := flag.String("db-port", "", "Database port")
@@ -946,7 +946,7 @@ func main() {
 		CookieFile:   *cookieFile,
 		OnlyExpunged: *onlyExpunged,
 		AlsoExpunged: *alsoExpunged,
-		Tag:          *tagSearch,
+		Search:          *search,
 	}
 
 	instance := NewSync(opts)
