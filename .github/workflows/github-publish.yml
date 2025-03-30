@@ -89,7 +89,7 @@ jobs:
         run: |
           echo "Running the program..."
           # Replace with the command that runs your program
-          ./e-hentai-sync -site exhentai --offset 24 --db-host 127.0.0.1 --db-port 3306 --db-user root --db-pass root --db-name ex
+          ./e-hentai-sync -site exhentai --also-expunged --offset 24 --db-host 127.0.0.1 --db-port 3306 --db-user root --db-pass root --db-name ex
           echo "Dumping the database..."
           rm -rf *.sql.zst
           export DATE=$(date +%F)
