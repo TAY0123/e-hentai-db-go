@@ -305,7 +305,7 @@ func (s *Sync) getOffsetGid(offset int64) (int64, error) {
 // --- Page Fetching Helpers ---
 
 func (s *Sync) getPagesByPrev(prev string) ([]PageEntry, error) {
-	path := fmt.Sprintf("/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on&f_sh=&f_spf=&f_spt=&f_sfl=on&f_sfu=on", prev)
+	path := fmt.Sprintf("/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on&f_sh=&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on", prev)
 	url := "https://" + s.host + path
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -693,7 +693,7 @@ func (s *Sync) run() error {
 
 	for {
 		time.Sleep(time.Duration(s.config.SleepDuration) * time.Second)
-		fetchMsg := fmt.Sprintf("Fetching page from https://%s/?prev=%s", s.host, prev)
+		fetchMsg := fmt.Sprintf("Fetching page from https://%s/?prev=%s&f_cats=0&advsearch=1&f_sname=on&f_stags=on&f_sh=&f_spf=&f_spt=&f_sft=on&f_sfu=on&f_sfl=on", s.host, prev)
 
 		var pageEntries []PageEntry
 		for attempt := 0; attempt < s.config.RetryCount; attempt++ {
