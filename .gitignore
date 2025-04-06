@@ -1,6 +1,5 @@
 # config file
 *.json
-*.yaml
 
 # env file
 .env
