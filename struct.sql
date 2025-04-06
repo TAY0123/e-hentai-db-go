@@ -5,11 +5,11 @@ CREATE TABLE IF NOT EXISTS `gallery` (
   `gid` int(11) NOT NULL,
   `token` char(10) NOT NULL,
   `archiver_key` varchar(60) NOT NULL,
-  `title` varchar(300) NOT NULL,
-  `title_jpn` varchar(300) NOT NULL,
+  `title` varchar(1024) NOT NULL,
+  `title_jpn` varchar(1024) NOT NULL,
   `category` varchar(15) NOT NULL,
   `thumb` varchar(150) NOT NULL,
-  `uploader` varchar(50) DEFAULT NULL,
+  `uploader` varchar(1024) DEFAULT NULL,
   `posted` int(11) NOT NULL,
   `filecount` int(11) NOT NULL,
   `filesize` bigint(20) NOT NULL,
@@ -40,7 +40,10 @@ CREATE TABLE `torrent` (
   `name` varchar(300) NOT NULL,
   `hash` char(40) DEFAULT NULL,
   `addedstr` varchar(20) DEFAULT NULL,
+  `added` datetime DEFAULT NULL,
   `fsizestr` varchar(15) DEFAULT NULL,
   `uploader` varchar(50) NOT NULL,
-  `expunged` tinyint(1) NOT NULL DEFAULT 0
+  `expunged` tinyint(1) NOT NULL DEFAULT 0,
+  `fsize_min` BIGINT UNSIGNED,
+  `fsize_max` BIGINT UNSIGNED
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;
