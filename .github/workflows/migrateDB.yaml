@@ -1,4 +1,4 @@
-name: Fetching expunged galleries
+name: Migrate DB
 
 permissions:
   contents: write
