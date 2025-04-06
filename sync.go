@@ -680,8 +680,8 @@ func (s *Sync) saveGallery(gallery GalleryMetadata) error {
 
 func (s *Sync) saveTorrent(gid int, torrent TorrentInfo, uploader string) error {
 	stmt, err := s.db.Prepare(`
-          INSERT INTO torrent (gid, name, hash, addedstr, fsizestr, uploader, expunged)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO torrent (gid, name, hash, added, fsize, uploader, expunged)
+          VALUES (?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?)
     `)
 	if err != nil {
 		return fmt.Errorf("preparing torrent stmt: %w", err)
