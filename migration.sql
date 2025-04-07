@@ -15,9 +15,8 @@ SET fsizestr = NULL,
     addedstr = NULL
 WHERE fsize != 0 ;
 
-ALTER TABLE torrent
-  ADD COLUMN fsize_min BIGINT UNSIGNED,
-  ADD COLUMN fsize_max BIGINT UNSIGNED;
+ALTER TABLE torrent MODIFY COLUMN fsize_min BIGINT UNSIGNED;
+ALTER TABLE torrent MODIFY COLUMN fsize_max BIGINT UNSIGNED;
 
 UPDATE torrent
 SET 
