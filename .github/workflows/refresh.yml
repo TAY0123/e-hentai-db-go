@@ -1,4 +1,4 @@
-name: Build, Import DB, Dump & Create Pre-release
+name: run on trigger
 
 permissions:
   contents: write
@@ -38,7 +38,7 @@ jobs:
             }
             // Find the newest pre-release with a name starting with "Dump"
             const dumpPreRelease = releases.data.find(
-              release => release.prerelease && release.name.startsWith('Dump')
+              release => release.prerelease && release.name.startsWith('Dump 2025-07-28 12:42')
             );
             if (!dumpPreRelease) {
               core.setFailed("No Dump pre-release found");
@@ -87,7 +87,7 @@ jobs:
         run: |
           echo "Running the program..."
           # Replace with the command that runs your program
-          ./e-hentai-sync -site exhentai --also-expunged --offset 96 --db-host 127.0.0.1 --db-port 3306 --db-user root --db-pass root --db-name ex
+          ./e-hentai-sync -site exhentai --also-expunged --db-host 127.0.0.1 --db-port 3306 --db-user root --db-pass root --db-name ex
           echo "Dumping the database..."
           rm -rf *.sql.zst
           export DATE=$(date +%F)
