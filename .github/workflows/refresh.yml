@@ -24,35 +24,32 @@ jobs:
           go get
           go build
 
-      - name: Get latest dump pre-release asset URL
+      - name: Get specific dump asset URLs (by tag)
         id: get_release
         uses: actions/github-script@v6
         with:
           script: |
-            const releases = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            if (releases.data.length === 0) {
-              core.setFailed("No releases found");
+            const TAG = 'dump-202507281242'; // <-- your exact tag
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: TAG,
+              });
+              if (!release || !release.assets || release.assets.length === 0) {
+                core.setFailed(`Release '${TAG}' has no assets`);
+              }
+              const sqlAssets = release.assets.filter(a => a.name.endsWith('.sql.zst'));
+              if (sqlAssets.length === 0) {
+                core.setFailed(`No .sql.zst assets found on release '${TAG}'`);
+              }
+              const sqlUrls = sqlAssets.map(a => a.browser_download_url).join(',');
+              core.setOutput('sql_urls', sqlUrls);
+              core.setOutput('release_tag', release.tag_name);
+              core.setOutput('release_name', release.name);
+            } catch (e) {
+              core.setFailed(`Failed to get release by tag '${TAG}': ${e.message}`);
             }
-            // Find the newest pre-release with a name starting with "Dump"
-            const dumpPreRelease = releases.data.find(
-              release => release.prerelease && release.name.startsWith('dump-202507281242')
-            );
-            if (!dumpPreRelease) {
-              core.setFailed("No Dump pre-release found");
-            }
-            // Filter all assets ending with .sql.zst
-            const sqlAssets = dumpPreRelease.assets.filter(asset => asset.name.endsWith('.sql.zst'));
-            if (sqlAssets.length === 0) {
-              core.setFailed("No SQL asset found in the pre-release");
-            }
-            // Join the URLs into a comma-separated string
-            const sqlUrls = sqlAssets.map(asset => asset.browser_download_url).join(',');
-            core.setOutput("sql_urls", sqlUrls);
-            // Also output the release tag for later use
-            core.setOutput("release_tag", dumpPreRelease.tag_name);
 
       # Download the SQL file from the latest release
       - name: Download SQL file from latest release
