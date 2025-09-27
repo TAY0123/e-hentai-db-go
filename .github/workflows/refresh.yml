@@ -38,7 +38,7 @@ jobs:
             }
             // Find the newest pre-release with a name starting with "Dump"
             const dumpPreRelease = releases.data.find(
-              release => release.prerelease && release.name.startsWith('Dump 2025-07-28 12:42')
+              release => release.prerelease && release.name.startsWith('dump-202507281242')
             );
             if (!dumpPreRelease) {
               core.setFailed("No Dump pre-release found");
