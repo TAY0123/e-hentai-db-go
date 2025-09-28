@@ -1,6 +1,6 @@
 # e-hentai-db-go
 
-A command-line tool written in Go that synchronizes gallery data from e-hentai/exhentai websites into a MySQL database. The tool fetches page entries via HTTP, calls the e-hentai API for metadata, and then inserts or updates the database. At the end of the sync process, it generates a report with total entry count, the last posted gallery ID, and the cutoff time in UTC.
+A command-line tool written in Go that synchronizes gallery data from e-hentai/exhentai websites into a MySQL or SQLite database. The tool fetches page entries via HTTP, calls the e-hentai API for metadata, and then inserts or updates the database. At the end of the sync process, it generates a report with total entry count, the last posted gallery ID, and the cutoff time in UTC.
 
 ## Database dump
 - [Releases](https://github.com/TAY0123/e-hentai-db-go/releases)
@@ -8,10 +8,11 @@ A command-line tool written in Go that synchronizes gallery data from e-hentai/e
 ## Requirements
 
 - Go (version 1.14+ recommended)
-- MySQL Database
+- MySQL or SQLite database
 - [Viper](https://github.com/spf13/viper)
 - [pterm](https://github.com/pterm/pterm)
 - [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql)
+- [mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
 
 ## Build
 
@@ -34,17 +35,25 @@ A command-line tool written in Go that synchronizes gallery data from e-hentai/e
    go build
    ```
 
+   To include the SQLite driver, build with the `sqlite` tag (CGO enabled):
+
+   ```bash
+   go build -tags sqlite
+   ```
+
 ## Configuration
 
 Create a `config.yaml` file in the root directory with the following structure:
 
 ```yaml
 database:
+  driver: "mysql"
   host: "127.0.0.1"
   port: "3306"
   user: "your_db_user"
   password: "your_db_password"
   name: "your_db_name"
+  sqlite_path: "./gallery.db" # optional when using sqlite driver
 sleep_duration: 10 #recommanded
 retry_count: 3
 ```
@@ -56,6 +65,8 @@ Alternatively, you can override these settings using environment variables:
 - `DB_USER`
 - `DB_PASS`
 - `DB_NAME`
+- `DB_DRIVER`
+- `DB_SQLITE_PATH`
 - `COOKIE`
 - `SLEEP_DURATION`
 
@@ -79,10 +90,19 @@ Run the sync tool with the following options:
 - **`--cookie-file`**:  
   Path to a cookie JSON file (required for exhentai). If not provided, the tool will look for the `COOKIE` environment variable.
 
-- **`--debug`**:  
+- **`--debug`**:
   Enable debug logging.
 
-- **`--only-expunged`**:  
+- **`--db-driver`**:
+  Database driver to use (`mysql` or `sqlite`).
+
+- **`--db-host`**, **`--db-port`**, **`--db-user`**, **`--db-pass`**, **`--db-name`**:
+  Override database connection details. For SQLite, `--db-name` can be used to set the database file name.
+
+- **`--sqlite-path`**:
+  Explicit path to the SQLite database file.
+
+- **`--only-expunged`**:
   Fetch only expunged entry.
 
 - **`--also-expunged`**:  

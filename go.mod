@@ -3,9 +3,10 @@ module e-hentai-sync
 go 1.24.0
 
 require (
-	github.com/go-sql-driver/mysql v1.9.1
-	github.com/pterm/pterm v0.12.80
-	github.com/spf13/viper v1.20.1
+        github.com/go-sql-driver/mysql v1.9.1
+        github.com/mattn/go-sqlite3 v1.14.22
+        github.com/pterm/pterm v0.12.80
+        github.com/spf13/viper v1.20.1
 )
 
 require (
