@@ -49,11 +49,13 @@ func errorLog(format string, a ...interface{}) {
 // --- Configuration using Viper with Environment Variables ---
 
 type Config struct {
+	DBDriver      string
 	DBHost        string
 	DBPort        string
 	DBUser        string
 	DBPass        string
 	DBName        string
+	SQLitePath    string
 	SleepDuration int // in seconds
 	RetryCount    int // number of retries for API and page fetch calls
 }
@@ -65,11 +67,15 @@ func loadConfig() Config {
 
 	// Bind environment variables (optionally with a prefix)
 	viper.AutomaticEnv()
+	viper.SetDefault("database.driver", "mysql")
+
+	viper.BindEnv("database.driver", "DB_DRIVER")
 	viper.BindEnv("database.host", "DB_HOST")
 	viper.BindEnv("database.port", "DB_PORT")
 	viper.BindEnv("database.user", "DB_USER")
 	viper.BindEnv("database.password", "DB_PASS")
 	viper.BindEnv("database.name", "DB_NAME")
+	viper.BindEnv("database.sqlite_path", "DB_SQLITE_PATH")
 	// Bind sleep duration from environment variable SLEEP_DURATION
 	viper.BindEnv("sleep_duration", "SLEEP_DURATION")
 
@@ -82,11 +88,13 @@ func loadConfig() Config {
 	}
 
 	return Config{
+		DBDriver:      viper.GetString("database.driver"),
 		DBHost:        viper.GetString("database.host"),
 		DBPort:        viper.GetString("database.port"),
 		DBUser:        viper.GetString("database.user"),
 		DBPass:        viper.GetString("database.password"),
 		DBName:        viper.GetString("database.name"),
+		SQLitePath:    viper.GetString("database.sqlite_path"),
 		SleepDuration: viper.GetInt("sleep_duration"),
 		RetryCount:    viper.GetInt("retry_count"),
 	}
@@ -137,12 +145,12 @@ func loadExCookies(data []byte) (string, error) {
 // --- Data Structures for API and Page Entries ---
 
 type Options struct {
-	Site       string
-	Offset     int64 // number of hours to offset when fetching pages
-	CookieFile string
+	Site         string
+	Offset       int64 // number of hours to offset when fetching pages
+	CookieFile   string
 	OnlyExpunged bool
-    AlsoExpunged bool
-	Search          string
+	AlsoExpunged bool
+	Search       string
 }
 
 type PageEntry struct {
@@ -189,27 +197,27 @@ type APIResponse struct {
 // --- Sync Structure ---
 
 type Sync struct {
-	host    string
-	offset  int64
-	cookies string
-	db      *sql.DB
-	config  Config
-	client  *http.Client
+	host         string
+	offset       int64
+	cookies      string
+	db           *sql.DB
+	config       Config
+	client       *http.Client
 	onlyExpunged bool
-    alsoExpunged bool
-	search          string
+	alsoExpunged bool
+	search       string
 }
 
 // NewSync creates a new Sync instance based on provided options.
 // It now also reads cookie data from an environment variable if not provided via a file.
 func NewSync(opts Options) *Sync {
 	s := &Sync{
-		config: loadConfig(),
-		client: &http.Client{Timeout: 15 * time.Second},
-		offset: opts.Offset,
+		config:       loadConfig(),
+		client:       &http.Client{Timeout: 15 * time.Second},
+		offset:       opts.Offset,
 		onlyExpunged: opts.OnlyExpunged,
 		alsoExpunged: opts.AlsoExpunged,
-		search:          opts.Search, // assign the search from options
+		search:       opts.Search, // assign the search from options
 	}
 
 	if opts.Site == "exhentai" {
@@ -262,11 +270,37 @@ func NewSync(opts Options) *Sync {
 	return s
 }
 
-// initConnection establishes the MySQL connection.
+// initConnection establishes the database connection based on configuration.
 func (s *Sync) initConnection() {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?timeout=10s",
-		s.config.DBUser, s.config.DBPass, s.config.DBHost, s.config.DBPort, s.config.DBName)
-	db, err := sql.Open("mysql", dsn)
+	driver := s.config.DBDriver
+	if driver == "" {
+		driver = "mysql"
+	}
+
+	var (
+		db  *sql.DB
+		err error
+	)
+
+	switch strings.ToLower(driver) {
+	case "sqlite", "sqlite3":
+		sqlitePath := s.config.SQLitePath
+		if sqlitePath == "" {
+			sqlitePath = s.config.DBName
+		}
+		if sqlitePath == "" {
+			errorLog("SQLite path must be provided via config or --sqlite-path when using sqlite driver")
+			os.Exit(1)
+		}
+		db, err = sql.Open("sqlite3", sqlitePath)
+	case "mysql":
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?timeout=10s",
+			s.config.DBUser, s.config.DBPass, s.config.DBHost, s.config.DBPort, s.config.DBName)
+		db, err = sql.Open("mysql", dsn)
+	default:
+		errorLog("Unsupported database driver: %s", driver)
+		os.Exit(1)
+	}
 	if err != nil {
 		errorLog("Error opening DB: %v", err)
 		os.Exit(1)
@@ -365,14 +399,14 @@ func (s *Sync) runExpungedFetch() error {
 			return err
 		}
 	}
-	
+
 	infoLog("Starting expunged fetch with gid: %d", startGid)
 	prev := strconv.FormatInt(startGid, 10)
 	area, _ := pterm.DefaultArea.Start()
-	
+
 	for {
 		time.Sleep(time.Duration(s.config.SleepDuration) * time.Second)
-		
+
 		var fetchURL string
 		var pageEntries []PageEntry
 		for attempt := 0; attempt < s.config.RetryCount; attempt++ {
@@ -391,13 +425,13 @@ func (s *Sync) runExpungedFetch() error {
 			infoLog("No new expunged entries found. Exiting expunged fetch loop.")
 			break
 		}
-		
+
 		pageCount := len(pageEntries)
 		apiCount, err := s.importPage(pageEntries)
 		if err != nil {
 			errorLog("Error importing expunged page: %v", err)
 		}
-		
+
 		newestEntryDate := "N/A"
 		if pageCount > 0 {
 			t, err := time.Parse("2006-01-02 15:04", pageEntries[0].Posted)
@@ -413,8 +447,7 @@ func (s *Sync) runExpungedFetch() error {
 			{Level: 1, Text: fmt.Sprintf("Fetched Expunged API Entries: %d", apiCount)},
 		}
 		bulletStr, _ := pterm.DefaultBulletList.WithItems(bulletItems).Srender()
-		
-		
+
 		// Use the fetchURL returned from getPagesByPrev in the logging message.
 		fetchMsg := "Fetched page from " + fetchURL
 		prev = pageEntries[0].GID // Update prev based on the newest fetched entry.
@@ -426,7 +459,7 @@ func (s *Sync) runExpungedFetch() error {
 // --- Page Fetching Helpers ---
 
 func (s *Sync) getPagesByPrev(prev string, expunged bool) (string, []PageEntry, error) {
-    // Set the extra search parameter if a search is provided.
+	// Set the extra search parameter if a search is provided.
 	searchParam := ""
 	if s.search != "" {
 		searchParam = "&f_search=" + url.QueryEscape(s.search)
@@ -812,12 +845,12 @@ func (s *Sync) run() error {
 	if err != nil {
 		return err
 	}
-    
-    // If only expunged mode is enabled, run the expunged fetch loop exclusively.
-    if s.onlyExpunged {
-        infoLog("Running in only-expunged mode.")
-        return s.runExpungedFetch()
-    }
+
+	// If only expunged mode is enabled, run the expunged fetch loop exclusively.
+	if s.onlyExpunged {
+		infoLog("Running in only-expunged mode.")
+		return s.runExpungedFetch()
+	}
 
 	var startGid int64
 	if s.offset > 0 {
@@ -911,16 +944,21 @@ func main() {
 	alsoExpunged := flag.Bool("also-expunged", false, "Also fetch expunged galleries after normal fetching")
 	search := flag.String("search", "", "Optional keyword to search for")
 
+	dbDriver := flag.String("db-driver", "", "Database driver (mysql or sqlite)")
 	dbHost := flag.String("db-host", "", "Database host")
 	dbPort := flag.String("db-port", "", "Database port")
 	dbUser := flag.String("db-user", "", "Database user")
 	dbPass := flag.String("db-pass", "", "Database password")
-	dbName := flag.String("db-name", "", "Database name")
+	dbName := flag.String("db-name", "", "Database name (or SQLite filename)")
+	sqlitePath := flag.String("sqlite-path", "", "SQLite database file path")
 
 	flag.Parse()
 	debugMode = *debug
 
 	// Override viper config with command line arguments if provided
+	if *dbDriver != "" {
+		viper.Set("database.driver", *dbDriver)
+	}
 	if *dbHost != "" {
 		viper.Set("database.host", *dbHost)
 	}
@@ -936,6 +974,9 @@ func main() {
 	if *dbName != "" {
 		viper.Set("database.name", *dbName)
 	}
+	if *sqlitePath != "" {
+		viper.Set("database.sqlite_path", *sqlitePath)
+	}
 	if *sleepDuration > 0 {
 		viper.Set("sleep_duration", *sleepDuration)
 	}
@@ -946,7 +987,7 @@ func main() {
 		CookieFile:   *cookieFile,
 		OnlyExpunged: *onlyExpunged,
 		AlsoExpunged: *alsoExpunged,
-		Search:          *search,
+		Search:       *search,
 	}
 
 	instance := NewSync(opts)
